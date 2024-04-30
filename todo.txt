@@ -7,6 +7,7 @@
 
 # HARDER
 - check if you have all the files in initial directory, if not download them
+- if pacman fails to reinstall packages let it sync mirrors and try again
 - try to figure out what would happen if you were to run the script twice with two different users
 - In the future instead of a zip it should use only a .git file in $HOME and use that to sync all the configs, without having do unzip anything
 - In the future some packages should be automatically be tagged, checking system configuration (like btrfs, tpm, ucode)

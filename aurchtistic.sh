@@ -243,9 +243,11 @@ adduserpass() {
 
 	unset pass1 pass2
 
-	CACHE_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
+	CACHE_DIR="/home/$username/.local/cache/aurchtistic"
+	mkdir -p $CACHE_DIR
 	DOTS_DIR="/home/$username/.local/share/aurchtistic"
 	mkdir -p $DOTS_DIR
+	chown "${username}:${username}" -R "/home/$username/"
 }
 
 miscellaneaus() {
@@ -277,6 +279,8 @@ miscellaneaus() {
 	printf "permit persist :wheel\npermit nopass $username as root\npermit nopass root as $username\n" >>/etc/doas.conf || return 42
 	verbose chown -c root:root /etc/doas.conf
 	ln -s /usr/bin/doas /usr/bin/sudo
+
+	verbose git clone --depth=1 "${aurchtistic_repo}" "${CACHE_DIR}"
 
 	typer "Preparations for script completed.\n" || return 1
 }
@@ -401,15 +405,16 @@ sway_setup() {
 	sleep 20
 	typer "Slept for 20..."
 	# tail --pid=$(pgrep -u $username zsh) -f /dev/null
-	kill -SIGTERM $(pgrep -u $username zsh)
+	# THIS DOESNT DO ANYTHING
+	kill -SIGTERM "$(pgrep -u $username zsh)"
 
 	# Install config files
-	cp -alf "${DOTS_DIR}/configs/." "/home/$username/."
+	cp -alf "${DOTS_DIR}/configs/" "/home/$username/."
 	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k || return 40
 
 	# Install pacman hooks
 	mkdir -p /etc/pacman.d/hooks
-	ln "${DOTS_DIR}/pacman_hooks/pacs.hook" /etc/pacman.d/hooks
+	ln "${DOTS_DIR}/pacman_hooks/pacs.hook" "/etc/pacman.d/hooks/."
 	typer "Installed pacman hooks.\n" || return 1
 
 	# Install root configs files
@@ -421,24 +426,24 @@ sway_setup() {
 	typer "Sleeping for 20..."
 	sleep 20
 	typer "Slept for 20..."
-	cp -fr "${DOTS_DIR}/root/*" /root/.
+	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /root/.oh-my-zsh/custom/themes/powerlevel10k || return 40
+	cp -af "${DOTS_DIR}/root/." /root/.
 	typer "Installed root zsh configs.\n" || return 1
 
 	# Install scripts
 	cd "/home/$username"
 	mkdir -p "/home/$username/.local/bin"
-	cp -alf "${DOTS_DIR}/bin/* /home/$username/.local/bin/."
+	cp -alf "${DOTS_DIR}/bin/." "/home/$username/.local/bin/."
 	typer "Configs installed, home directories created.\n" || return 1
 
 	# Set aurchtistic_finalize script and let it start in .zprofile
-	echo "CACHE_DIR=${CACHE_DIR}" >>"/home/$username/.zprofile"
-	echo "bash ${CACHE_DIR}/aurchtistic_finalize" >>"/home/$username/.zprofile"
+	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >>"/home/$username/.zprofile"
 	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
 
 	# Make sure the $username has rights for all their files
 	verbose chown -R "$username:$username" "/home/$username"
-	verbose chmod u+x /home/$username/.local/bin/*
-	verbose chmod u+rwx /home/$username/aurchtistic*
+	verbose chmod -R u+x "/home/$username/.local/bin/"
+	verbose chmod -R u+rwx "/home/$username/.local/share/aurchtistic/"
 	typer "Changed home files ownership.\n" || return 1
 
 	# Enable required systemd services
