@@ -4,25 +4,19 @@
 # $pass1
 # $pass2
 # $username
-# $aurchtistic_dir
-# $aurhelper
+# $cache_dir
+# $AURHELPER
 # $packages_list
 # $configs_repo
 # $scripts_repo
 # $VERBOSE
-# #SKIP
+# $SKIP
 
-aurhelper="paru"
-packages_list="http://192.168.122.1:41062/www/aurchtistic/packages.csv"
-configs_repo="http://192.168.122.1:41062/www/aurchtistic/configs.zip"
-root_configs_repo="http://192.168.122.1:41062/www/aurchtistic/root_configs.zip"
-scripts_repo="http://192.168.122.1:41062/www/aurchtistic/scripts.zip"
-wallpaper="http://192.168.122.1:41062/www/aurchtistic/wallpaper.jpg"
-aurchtistic_finalize="http://192.168.122.1:41062/www/aurchtistic/aurchtistic_finalize.sh"
-aurchtistic_finalize_root="http://192.168.122.1:41062/www/aurchtistic/aurchtistic_finalize_root.sh"
-
+aurchtistic_repo="https://github.com/placobravo/Aurchtistic"
+dotfiles="https://github.com/placobravo/dotfiles"
 VERBOSE=0
 SKIP=0
+AURHELPER="paru"
 
 #################################################################################
 #                                  FUNCTIONS                                    #
@@ -150,7 +144,7 @@ error() {
 		typer "\nYou got an error while using pacman.\n" >&2
 		;;
 	44)
-		typer "\nYou got an error while using $aurhelper.\n" >&2
+		typer "\nYou got an error while using $AURHELPER.\n" >&2
 		;;
 	45)
 		typer "\nYou got an error while using flatpak.\n" >&2
@@ -199,7 +193,7 @@ welcome() {
 	fi
 
 	# Check if script is running in bash, exit otherwise
-	if [ $(ps -p $$ -o cmd | tail -n 1 | sed 's/ .*//') != "/bin/bash" ]; then
+	if [ $(ps -p $$ -o cmd | tail -n 1 | sed 's/ .*//') != "bash" ]; then
 		typer "\nAre you sure you are runnig this script with bash?\n" && exit 1
 	fi
 
@@ -247,11 +241,11 @@ adduserpass() {
 	echo "$username:$pass1" | chpasswd
 	typer "\nPassword for $username updated!\n" || return 1
 
-	export aurchtistic_dir="/home/$username/.local/aurchtistic"
-	mkdir -p "$aurchtistic_dir"
-	chown -R "$username":"$username" "$aurchtistic_dir"
 	unset pass1 pass2
-	typer "Made Aurchtistic folder in /home/$username/.local/aurchtistic.\n" || return 1
+
+	CACHE_DIR=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
+	DOTS_DIR="/home/$username/.local/share/aurchtistic"
+	mkdir -p $DOTS_DIR
 }
 
 miscellaneaus() {
@@ -287,31 +281,28 @@ miscellaneaus() {
 	typer "Preparations for script completed.\n" || return 1
 }
 
-aurhelper_install() {
-	# Used to install $aurhelper. Could also be used for other aur
+AURHELPER_install() {
+	# Used to install $AURHELPER. Could also be used for other aur
 	# packages but there's not need for it
 	trap 'return 1' SIGINT
 
-	# If $aurhelper is installed already, skip installation
-	pacman -Qq $aurhelper >/dev/null 2>&1 && echo "$aurhelper is already installed. Skipping..." && return 0
+	# If $AURHELPER is installed already, skip installation
+	pacman -Qq $AURHELPER >/dev/null 2>&1 && echo "$AURHELPER is already installed. Skipping..." && return 0
 
-	typer "Installing ${aurhelper}...\n" || return 1
-	cd $aurchtistic_dir
-	verbose doas -u "$username" git clone "https://aur.archlinux.org/$aurhelper.git" || return 40
-	cd $aurhelper
+	typer "Installing ${AURHELPER}...\n" || return 1
+	cd /home/$username/
+	verbose doas -u "$username" git clone "https://aur.archlinux.org/$AURHELPER.git" || return 40
+	cd $AURHELPER
 	verbose doas -u "$username" makepkg --noconfirm -sirc || return 47
-	typer "$aurhelper installed.\n" || return 1
+	typer "$AURHELPER installed.\n" || return 1
 }
 
 configure_packages() {
 	# This function downloads and modifies the packages.csv list based on user options
 	trap 'return 1' SIGINT
 
-	# Download packages list
-	cd $aurchtistic_dir
-	curl -Lsk "$packages_list" >packages.csv || return 41
-
-	# Make a copy of the orignal file on tmp, and work on that one
+	# Make a copy of the orignal packages file on tmp, and work on that one
+	cd $CACHE_DIR
 	cp packages.csv /tmp/pkgs.csv
 
 	# If user selected the "skip" option we end the function here, and simply leave all the
@@ -386,7 +377,7 @@ install_packages() {
 	# If arrays are empty do not do anything
 	if [ ! ${#aurs[@]} -eq 0 ]; then
 		typer "Installing packages from AUR...\n" || return 1
-		verbose doas -u "$username" "$aurhelper" -S --noconfirm "${aurs[@]}" || return 44
+		verbose doas -u "$username" "$AURHELPER" -S --noconfirm "${aurs[@]}" || return 44
 	fi
 
 	if [ ! ${#flatpaks[@]} -eq 0 ]; then
@@ -402,49 +393,46 @@ sway_setup() {
 	# Create home directories
 	cd "/home/$username"
 	mkdir "/home/$username/Stuff" "/home/$username/Downloads" "/home/$username/Desktop"
+	verbose git clone --depth 1 "$dotfiles" "$DOTS_DIR" || return 40
 
 	# Installing oh-my-zsh
 	doas -u $username sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
-	# NEED TO WAIT BEFORE!
+	typer "Sleeping for 20..."
+	sleep 20
+	typer "Slept for 20..."
+	# tail --pid=$(pgrep -u $username zsh) -f /dev/null
 	kill -SIGTERM $(pgrep -u $username zsh)
 
-	cp .p10k.zsh
-	cp .zshrc
-	git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k
-
-	# replacing .zshrc
-	# install powerlevelk10
-
 	# Install config files
-	curl -Lsk "$configs_repo" >configs.zip || return 41
-	verbose unzip configs.zip && rm configs.zip
+	cp -alf "${DOTS_DIR}/configs/." "/home/$username/."
+	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k || return 40
 
 	# Install pacman hooks
 	mkdir -p /etc/pacman.d/hooks
-	mv pacs.hook /etc/pacman.d/hooks
+	ln "${DOTS_DIR}/pacman_hooks/pacs.hook" /etc/pacman.d/hooks
 	typer "Installed pacman hooks.\n" || return 1
 
 	# Install root configs files
+	verbose chsh -s /bin/zsh
+	typer "Changed root default shell to zsh." || return 1
 	cd /root
-	curl -Lsk "$root_configs_repo" >root_configs.zip || return 41
-	verbose unzip root_configs.zip && rm root_configs.zip
+	sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
+	# NEED TO WAIT BEFORE
+	typer "Sleeping for 20..."
+	sleep 20
+	typer "Slept for 20..."
+	cp -fr "${DOTS_DIR}/root/*" /root/.
 	typer "Installed root zsh configs.\n" || return 1
 
-	# Install scripting file
+	# Install scripts
 	cd "/home/$username"
-	mkdir -p "/home/$username/.local/bin" && cd "/home/$username/.local/bin"
-	curl -Lsk "$scripts_repo" >scripts.zip || return 41
-	verbose unzip scripts.zip && rm scripts.zip
+	mkdir -p "/home/$username/.local/bin"
+	cp -alf "${DOTS_DIR}/bin/* /home/$username/.local/bin/."
 	typer "Configs installed, home directories created.\n" || return 1
 
-	# Downloading wallpaper
-	curl -Lsk "$wallpaper" >"/home/$username/Stuff/wallpaper.jpg" || return 41
-	typer "Downloaded wallpaper.\n" || return 1
-
-	# Download aurchtistic_finalize script and let it start in .zprofile
-	curl -Lsk $aurchtistic_finalize >aurchtistic_finalize.sh
-	curl -Lsk $aurchtistic_finalize_root >aurchtistic_finalize_root.sh
-	echo "bash /home/$username/.local/bin/aurchtistic_finalize.sh" >>"/home/$username/.zprofile"
+	# Set aurchtistic_finalize script and let it start in .zprofile
+	echo "CACHE_DIR=${CACHE_DIR}" >>"/home/$username/.zprofile"
+	echo "bash ${CACHE_DIR}/aurchtistic_finalize" >>"/home/$username/.zprofile"
 	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
 
 	# Make sure the $username has rights for all their files
@@ -490,7 +478,7 @@ sleep 1
 miscellaneaus || error "\nThe script crashed while making some changes to system.\n"
 sleep 1
 
-aurhelper_install || error "\nSomething went wrong while installing $aurhelper. You can try installing it yourself, or use another AUR helper.\n"
+AURHELPER_install || error "\nSomething went wrong while installing $AURHELPER. You can try installing it yourself, or use another AUR helper.\n"
 sleep 1
 
 configure_packages || error "\nError while configuring packages, it could be that the packages file could not be downloaded (or a cosmic ray hit your pc).\n"
