@@ -400,7 +400,7 @@ sway_setup() {
 	verbose git clone --depth 1 "$dotfiles" "$DOTS_DIR" || return 40
 
 	# Installing oh-my-zsh
-	doas -u $username sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
+	verbose doas -u $username sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
 	typer "Sleeping for 20..."
 	sleep 20
 	typer "Slept for 20..."
@@ -409,19 +409,19 @@ sway_setup() {
 	kill -SIGTERM "$(pgrep -u $username zsh)"
 
 	# Install config files
-	cp -alf "${DOTS_DIR}/configs/" "/home/$username/."
+	cp -alf "${DOTS_DIR}/configs/." "/home/$username/."
 	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k || return 40
 
 	# Install pacman hooks
 	mkdir -p /etc/pacman.d/hooks
-	ln "${DOTS_DIR}/pacman_hooks/pacs.hook" "/etc/pacman.d/hooks/."
+	cp "${DOTS_DIR}/pacman_hooks/pacs.hook" "/etc/pacman.d/hooks/."
 	typer "Installed pacman hooks.\n" || return 1
 
 	# Install root configs files
 	verbose chsh -s /bin/zsh
-	typer "Changed root default shell to zsh." || return 1
+	typer "Changed root default shell to zsh.\n" || return 1
 	cd /root
-	sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
+	verbose sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
 	# NEED TO WAIT BEFORE
 	typer "Sleeping for 20..."
 	sleep 20
@@ -443,7 +443,7 @@ sway_setup() {
 	# Make sure the $username has rights for all their files
 	verbose chown -R "$username:$username" "/home/$username"
 	verbose chmod -R u+x "/home/$username/.local/bin/"
-	verbose chmod -R u+rwx "/home/$username/.local/share/aurchtistic/"
+	verbose chmod -R u+rwx "${CACHE_DIR}"
 	typer "Changed home files ownership.\n" || return 1
 
 	# Enable required systemd services

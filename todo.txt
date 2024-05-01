@@ -3,6 +3,7 @@
 - the whiptail rows numbers is currently fixed and could cause problems like lines exceding the screen border
 - function to show the description of the installed packages
 - sometimes curl has problems with ca authorities and cant download
+- flatpak path
 
 
 # HARDER
@@ -17,6 +18,8 @@
 - listen for ctrl-c by user and if done so, put process in bg and ask user if they want to continue script or interrupt
 - add option to reset all the signing keys https://wiki.archlinux.org/title/Pacman/Package_signing
 - sometimes packages can't be installed from mirrors and sscipt crashes
+- Root files are not being hard linked at the moment due to user not having permits on them when git pullin. How can you fix this?
+- set keepassxc for keyring
 
 
 # QUESTIONS
