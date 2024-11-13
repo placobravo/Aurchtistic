@@ -1,27 +1,7 @@
-# EASIER
-- iptables nft makes script crash
 - the whiptail rows numbers is currently fixed and could cause problems like lines exceding the screen border
 - function to show the description of the installed packages
-- sometimes curl has problems with ca authorities and cant download
 - flatpak path
-
-
-# HARDER
-- check if you have all the files in initial directory, if not download them
-- if pacman fails to reinstall packages let it sync mirrors and try again
-- try to figure out what would happen if you were to run the script twice with two different users
-- In the future instead of a zip it should use only a .git file in $HOME and use that to sync all the configs, without having do unzip anything
-- In the future some packages should be automatically be tagged, checking system configuration (like btrfs, tpm, ucode)
-- check if sudo is installed and want to replace it with doas
-- cleanup function
-- make logs of operations so that if system shutdowns midgame you know about it
-- listen for ctrl-c by user and if done so, put process in bg and ask user if they want to continue script or interrupt
-- add option to reset all the signing keys https://wiki.archlinux.org/title/Pacman/Package_signing
-- sometimes packages can't be installed from mirrors and sscipt crashes
-- Root files are not being hard linked at the moment due to user not having permits on them when git pullin. How can you fix this?
-- set keepassxc for keyring
-
-
-# QUESTIONS
-- what happens if there are already zhsrc config files in /root?
-- what if sudo exists already exists or if you have a link to sudo already?
+- systemd-resolve
+- logseq sync instead of logseq
+- change tty font
+- return function is bloated and has no real purpose, could be removed or at least thinned down

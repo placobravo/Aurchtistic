@@ -11,9 +11,11 @@
 # $scripts_repo
 # $VERBOSE
 # $SKIP
+# $dotfiles
+# $aurchtistic_repo
 
 aurchtistic_repo="https://github.com/placobravo/Aurchtistic"
-dotfiles="https://github.com/placobravo/dotfiles"
+dotfiles="https://github.com/placobravo/arch-configs"
 VERBOSE=0
 SKIP=0
 AURHELPER="paru"
@@ -24,7 +26,6 @@ AURHELPER="paru"
 typer() {
 	# Function used to make printing of text a little fancier,
 	# as it being typed in real time
-	trap 'return 1' SIGINT
 
 	local speed=0.025
 
@@ -188,18 +189,34 @@ welcome() {
 	fi
 
 	# Check if system is running arch, exit otherwise
-	if [ ! $(cat /etc/os-release 2>/dev/null | grep "ID=arch") ]; then
+	if ! cat /etc/os-release | grep "ID=arch" >/dev/null 2>&1; then
 		typer "\nAre you sure you are running this script on an Archlinux system?\n" && exit 1
 	fi
 
 	# Check if script is running in bash, exit otherwise
-	if [ $(ps -p $$ -o cmd | tail -n 1 | sed 's/ .*//') != "bash" ]; then
+	local SCRIPT_SHELL=$(ps -p $$ -o cmd | tail -n 1 | sed 's/ .*//')
+	if [ ${SCRIPT_SHELL} != "bash" -a ${SCRIPT_SHELL} != "/bin/bash" ]; then
 		typer "\nAre you sure you are runnig this script with bash?\n" && exit 1
 	fi
 
-	typer "\n\nThis script is going to install the configuration that I use on my main Archlinux system.\n\nWARNING: Aurchtistic does some various checks to ensure that the installation will go smoothly, but it can't possibly check for 'everything'.\n\nIf you made some weird changes to your system (like disabling systemd or changing packet manager) the script will fail.\nBut if that is the case you probably don't need this anyway :)\n" || return 1
+	# Check dependencies
+	dependencies=(git pacman-contrib)
+	if ! pacman -Qq ${dependencies[@]} >/dev/null 2>&1; then
+		typer "\nYou are missing some dependencies:\n\n"
+		for x in ${dependencies[@]}; do
+			if ! pacman -Qq | grep $x >/dev/null; then
+				typer "${x}\n"
+			fi
+		done
+		typer "\nInstall them and then run the script again.\n"
+		exit 1
+	fi
 
-	typer "\nIn case you get an error while installing don't panic!\nAurchtistic has a built-in function that is going to remove any leftovers on your system, and revert any changes that it made up to the failure of the script.\n" || return 1
+	typer "\n\nThis script is going to install the configuration that I use on my main Archlinux system.\n\nWARNING: Aurchtistic is assuming that you are using a brand new installation of Arch without any modification.\nSome checks are done but it is not guaranteed that the script will run correctly if you have made some changes.\n" || return 1
+
+	typer "\nIf you start the script it is important not to stop it until it is done, in order to avoid any corruption that might happen to your system.\n" || return 1
+
+	typer "\nIf you want to check which changes are being made to the system quit now and check the help menu.\n" || return 1
 
 	while true; do
 		read -p "Do you want to continue? (y/N): " choice
@@ -219,8 +236,6 @@ welcome() {
 }
 
 adduserpass() {
-	trap 'return 1' SIGINT
-
 	while true; do
 		typer "Insert a username: " && read username
 		useradd -m "$username" -s /bin/zsh 2>/dev/null && mkdir -p /home/"$username" && usermod -aG wheel "$username" && break
@@ -245,50 +260,19 @@ adduserpass() {
 
 	CACHE_DIR="/home/$username/.local/cache/aurchtistic"
 	mkdir -p $CACHE_DIR
-	DOTS_DIR="/home/$username/.local/share/aurchtistic"
-	mkdir -p $DOTS_DIR
 	chown "${username}:${username}" -R "/home/$username/"
-}
-
-miscellaneaus() {
-	# Fetch some updated mirrors so that we are sure that the needed packages for the script are
-	# going to get downloaded without issues.
-	# It is not important if the mirrors are not super fast since we have only a few packages
-	# to download, we are going to rank them later.
-	trap 'return 1' SIGINT
-
-	typer "Fetching some fresh mirrors...\n" || return 1
-	curl -Lsk "https://archlinux.org/mirrorlist/?country=FR&country=SE&country=DE&country=GB&country=ES&country=IT&country=AU&protocol=https&use_mirror_status=on" | sed -e 's/^#Server/Server/' -e '/^#/d' >/etc/pacman.d/mirrorlist || return 41
-
-	# Sync packages database and update system
-	typer "Syncing arch packages database and updating system...\n" || return 1
-	verbose pacman -Sy --needed --noconfirm archlinux-keyring && verbose pacman --noconfirm -Su || return 43
-	verbose pacman --noconfirm -Syyu || return 43
-
-	# Remove base-devel and reinstall its meta packages except sudo (we use opendoas)
-	pacman -Qq base-devel >/dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		pacman --noconfirm -Rs base-devel || return 43
-	fi
-	typer "Installing packages needed for script...\n" || return 1
-	verbose pacman -S --needed --noconfirm opendoas curl pacman-contrib git debugedit autoconf automake binutils bison fakeroot file findutils flex gawk gcc gettext grep groff gzip libtool m4 make patch pkgconf sed texinfo which || return 43
-
+	
 	# Change default shell for users
 	sed -i -e 's/bash/zsh/' /etc/default/useradd || return 42
-
-	printf "permit persist :wheel\npermit nopass $username as root\npermit nopass root as $username\n" >>/etc/doas.conf || return 42
-	verbose chown -c root:root /etc/doas.conf
-	ln -s /usr/bin/doas /usr/bin/sudo
 
 	verbose git clone --depth=1 "${aurchtistic_repo}" "${CACHE_DIR}"
 
 	typer "Preparations for script completed.\n" || return 1
 }
 
-AURHELPER_install() {
+aurhelper_install() {
 	# Used to install $AURHELPER. Could also be used for other aur
 	# packages but there's not need for it
-	trap 'return 1' SIGINT
 
 	# If $AURHELPER is installed already, skip installation
 	pacman -Qq $AURHELPER >/dev/null 2>&1 && echo "$AURHELPER is already installed. Skipping..." && return 0
@@ -303,7 +287,6 @@ AURHELPER_install() {
 
 configure_packages() {
 	# This function downloads and modifies the packages.csv list based on user options
-	trap 'return 1' SIGINT
 
 	# Make a copy of the orignal packages file on tmp, and work on that one
 	cd $CACHE_DIR
@@ -340,7 +323,6 @@ configure_packages() {
 
 install_packages() {
 	# Function to be used after the packages.csv list is being modified by configure_packages()
-	trap 'return 1' SIGINT
 
 	# Modify pacman configuration file
 	sed -i -e 's/#Color/Color/;s/#ParallelDownloads/ParallelDownloads/;/ParallelDownloads = 5/a ILoveCandy' /etc/pacman.conf || return 42
@@ -354,6 +336,35 @@ install_packages() {
 	typer "Syncing mirrors and packages keyring...\n" || return 1
 	verbose pacman -Sy --needed --noconfirm archlinux-keyring && verbose pacman --noconfirm -Su || return 48
 	verbose pacman --noconfirm -Syyu || return 48
+
+	# Remove base-devel and reinstall its meta packages except sudo (we use opendoas)
+	pacman -Qq base-devel >/dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		verbose pacman --noconfirm -Rs base-devel || return 43
+	fi
+	typer "Installing opendoas instead of sudo.\n" || return 1
+	verbose pacman -S --needed --noconfirm opendoas curl debugedit autoconf automake binutils bison fakeroot file findutils flex gawk gcc gettext grep groff gzip libtool m4 make patch pkgconf sed texinfo which || return 43
+
+	printf "permit :wheel\npermit nopass $username as root\npermit nopass root as $username\n" >>/etc/doas.conf || return 42
+	verbose chown -c root:root /etc/doas.conf
+	ln -s /usr/bin/doas /usr/bin/sudo
+
+	# Let makepkg use doas instead of sudo
+	sed -i -e 's/#PACMAN_AUTH=()/PACMAN_AUTH=(doas)/' /etc/makepkg.conf
+	typer "Changed makepkg.conf to use doas."
+
+	# Replace iptables with iptables-nft
+	yes | verbose pacman -S iptables-nft || return 43
+	typer "Replaced iptables with nftables.\n" || return 1
+
+	# Install $AURHELPER
+    aurhelper_install || error "\nSomething went wrong while installing $AURHELPER. You can try installing it yourself, or use another AUR helper.\n"
+
+	# Let paru use doas (if paru is used as aurhelper)
+	if [ -f "/etc/paru.conf" ]; then
+		sed -i -e 's/#Sudo/Sudo/' /etc/paru.conf
+		typer "Updated paru.conf with doas.\n"
+	fi
 
 	# Install packages from pkgs.csv with P, F and A tags. Ignores packages with O tags.
 	# Add each name to an array and feed all elements to package manager
@@ -376,7 +387,7 @@ install_packages() {
 	done </tmp/pkgs.csv
 
 	typer "Installing packages from official repos...\n" || return 1
-	verbose pacman --needed --noconfirm -S "${officials[@]}" || return 43
+	verbose pacman --needed -S --noconfirm "${officials[@]}" || return 43
 
 	# If arrays are empty do not do anything
 	if [ ! ${#aurs[@]} -eq 0 ]; then
@@ -392,48 +403,20 @@ install_packages() {
 
 sway_setup() {
 	# Function used to configure the Desktop environment
-	trap 'return 1' SIGINT
 
 	# Create home directories
 	cd "/home/$username"
 	mkdir "/home/$username/Stuff" "/home/$username/Downloads" "/home/$username/Desktop"
-	verbose git clone --depth 1 "$dotfiles" "$DOTS_DIR" || return 40
 
-	# Installing oh-my-zsh
+	# Install oh-my-zsh
 	verbose doas -u $username sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
-	typer "Sleeping for 20..."
-	sleep 20
-	typer "Slept for 20..."
-	# tail --pid=$(pgrep -u $username zsh) -f /dev/null
-	# THIS DOESNT DO ANYTHING
-	kill -SIGTERM "$(pgrep -u $username zsh)"
 
 	# Install config files
-	cp -alf "${DOTS_DIR}/configs/." "/home/$username/."
+	verbose git clone --depth=1 "$dotfiles" "/home/$username/temp_confs" || return 40
+	mv /home/$username/temp_confs/* "/home/$username/"
+	mv /home/$username/temp_confs/.* "/home/$username"
+	rm -rf /home/$username/temp_confs/
 	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k || return 40
-
-	# Install pacman hooks
-	mkdir -p /etc/pacman.d/hooks
-	cp "${DOTS_DIR}/pacman_hooks/pacs.hook" "/etc/pacman.d/hooks/."
-	typer "Installed pacman hooks.\n" || return 1
-
-	# Install root configs files
-	verbose chsh -s /bin/zsh
-	typer "Changed root default shell to zsh.\n" || return 1
-	cd /root
-	verbose sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
-	# NEED TO WAIT BEFORE
-	typer "Sleeping for 20..."
-	sleep 20
-	typer "Slept for 20..."
-	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /root/.oh-my-zsh/custom/themes/powerlevel10k || return 40
-	cp -af "${DOTS_DIR}/root/." /root/.
-	typer "Installed root zsh configs.\n" || return 1
-
-	# Install scripts
-	cd "/home/$username"
-	mkdir -p "/home/$username/.local/bin"
-	cp -alf "${DOTS_DIR}/bin/." "/home/$username/.local/bin/."
 	typer "Configs installed, home directories created.\n" || return 1
 
 	# Set aurchtistic_finalize script and let it start in .zprofile
@@ -448,22 +431,18 @@ sway_setup() {
 
 	# Enable required systemd services
 	verbose systemctl enable NetworkManager bluetooth libvirtd udisks2 ufw sshd || return 46
+
 	typer "Enabled systemd services.\n" || return 1
 }
 
 granfinale() {
 	# Make last adjustments and greets the user
 
-	# Lock root user (default user has sudo privileges)
-	verbose passwd --lock root
-	typer "Locked root user.\n" || return 1
-
 	typer "\nEverything was installed succesfully.\nThe system will reboot shortly, you then will be able to log in with your newly added user.\nSway window manager should start automatically.\n\nRoot user has been disabled, you can use doas for admin rights.\n\n\n\nIf you want to reboot on your own you can interrupt the script with 'Ctrl+C'\n\nHave fun with your brand new Archlinux system :) \n\n\n" || return 1
 
-	for x in {2..6}; do
-		trap 'return 0' SIGINT
-		echo "Rebooting system in $((7 - $x))..."
-		sleep 5
+	for x in {1..5}; do
+		echo "Rebooting system in $((6 - $x))..."
+		sleep 3
 	done
 
 	systemctl reboot
@@ -478,12 +457,6 @@ welcome || error "\nThe user exited or a cosmic ray hit a very vital part of you
 sleep 1
 
 adduserpass || error "\nThe user exited or a cosmic ray hit a very vital part of your pc.\n"
-sleep 1
-
-miscellaneaus || error "\nThe script crashed while making some changes to system.\n"
-sleep 1
-
-AURHELPER_install || error "\nSomething went wrong while installing $AURHELPER. You can try installing it yourself, or use another AUR helper.\n"
 sleep 1
 
 configure_packages || error "\nError while configuring packages, it could be that the packages file could not be downloaded (or a cosmic ray hit your pc).\n"
