@@ -238,7 +238,7 @@ welcome() {
 adduserpass() {
 	while true; do
 		typer "Insert a username: " && read username
-		useradd -m "$username" -s /bin/zsh 2>/dev/null && mkdir -p /home/"$username" && usermod -aG wheel "$username" && break
+		useradd -m "$username" -s /bin/fish 2>/dev/null && mkdir -p /home/"$username" && usermod -aG wheel "$username" && break
 		typer "\nThis username is either not valid or exists already, try again.\n"
 	done
 	typer "User $username added!\n" || return 1
@@ -248,7 +248,7 @@ adduserpass() {
 		read -s pass1
 		typer "\nRetype your password: "
 		read -s pass2
-		[ $pass1 = $pass2 ] && break
+		[ "$pass1" = "$pass2" ] && break
 		typer "\nPasswords do not match, please type them again.\n" || return 1
 		unset pass1 pass2
 	done
@@ -262,9 +262,6 @@ adduserpass() {
 	mkdir -p $CACHE_DIR
 	chown "${username}:${username}" -R "/home/$username/"
 	
-	# Change default shell for users
-	sed -i -e 's/bash/zsh/' /etc/default/useradd || return 42
-
 	verbose git clone --depth=1 "${aurchtistic_repo}" "${CACHE_DIR}"
 
 	typer "Preparations for script completed.\n" || return 1
@@ -351,7 +348,7 @@ install_packages() {
 
 	# Let makepkg use doas instead of sudo
 	sed -i -e 's/#PACMAN_AUTH=()/PACMAN_AUTH=(doas)/' /etc/makepkg.conf
-	typer "Changed makepkg.conf to use doas."
+	typer "Changed makepkg.conf to use doas.\n"
 
 	# Replace iptables with iptables-nft
 	yes | verbose pacman -S iptables-nft || return 43
@@ -361,8 +358,10 @@ install_packages() {
     aurhelper_install || error "\nSomething went wrong while installing $AURHELPER. You can try installing it yourself, or use another AUR helper.\n"
 
 	# Let paru use doas (if paru is used as aurhelper)
-	if [ -f "/etc/paru.conf" ]; then
+	if [ $AURHELPER = "paru" ]; then
 		sed -i -e 's/#Sudo/Sudo/' /etc/paru.conf
+		sed -i -e 's/#\[bin\]/[bin]/' /etc/paru.conf
+		sed -i -e 's/SudoLoop/SudoLoop=true/' /etc/paru.conf
 		typer "Updated paru.conf with doas.\n"
 	fi
 
@@ -408,19 +407,15 @@ sway_setup() {
 	cd "/home/$username"
 	mkdir "/home/$username/Stuff" "/home/$username/Downloads" "/home/$username/Desktop"
 
-	# Install oh-my-zsh
-	verbose doas -u $username sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &
-
 	# Install config files
 	verbose git clone --depth=1 "$dotfiles" "/home/$username/temp_confs" || return 40
-	mv /home/$username/temp_confs/* "/home/$username/"
-	mv /home/$username/temp_confs/.* "/home/$username"
+
+	cp -rl /home/$username/temp_confs /home/$username
 	rm -rf /home/$username/temp_confs/
-	verbose git clone --depth=1 https://gitee.com/romkatv/powerlevel10k.git /home/$username/.oh-my-zsh/custom/themes/powerlevel10k || return 40
 	typer "Configs installed, home directories created.\n" || return 1
 
-	# Set aurchtistic_finalize script and let it start in .zprofile
-	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >>"/home/$username/.zprofile"
+	# Set aurchtistic_finalize script and let it start in fish shell
+	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >>"/home/$username/.config/fish/conf.d/aurchtistic_temp.fish"
 	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
 
 	# Make sure the $username has rights for all their files
