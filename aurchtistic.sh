@@ -282,10 +282,36 @@ aurhelper_install() {
 	typer "Installation of $AURHELPER completed.\n" || return 1
 }
 
-aurchtistic_finalize_root() {
+aurchtistic_finalize() {
+	# Set aurchtistic_finalize script and let it start in fish shell
+	# These are actions that need to be run after a reboot
+
+	# Execute some last actions before deleting itself
+	cat << "EOF" >/home/$username/.config/fish/conf.d/aurchtistic_temp.fish
+	#!/bin/bash
+
+	# Enable some systemd user services
+	systemctl --user enable --now pipewire-pulse pipewire wireplumber
+
+	# Runs some last actions as root
+	doas chmod +x /home/$USER/.local/cache/aurchtistic/aurchtistic_finalize_root.sh
+	doas /home/$USER/.local/cache/aurchtistic/aurchtistic_finalize_root.sh $USER
+
+	# Remove the cache directory as last action
+	rm -rf /home/$USER/.local/cache/aurchtistic
+
+	# Remove bash leftovers
+	rm -f /home/$USER/.bash*
+
+	# Delete itself
+	rm -f $HOME/.config/fish/conf.d/aurchtistic_temp.fish
+
+	exit 0
+EOF
+
 	# Create file with last actions to run as root after a reboot
 	# Execute some last actions as root user, before being deleted by aurchtistic_temp.fish
-	# The file is used by aurchtistic_finalize()
+	# The file is called by the fish function above
 	cat << "EOF" >/home/$username/.local/cache/aurchtistic/aurchtistic_finalize_root.sh
 	#!/bin/bash
 
@@ -298,33 +324,6 @@ aurchtistic_finalize_root() {
 	sed -i -e "/permit nopass $1 as root/d" /etc/doas.conf
 	sed -i -e "/permit nopass root as $1/d" /etc/doas.conf
 	chmod -c 0400 /etc/doas.conf
-
-	exit 0
-EOF
-}
-
-aurchtistic_finalize() {
-	# Set aurchtistic_finalize script and let it start in fish shell
-	# These are actions that need to be run after a reboot
-
-	# Execute some last actions before deleting itself
-	cat << "EOF" >/home/$username/.config/fish/conf.d/aurchtistic_temp.fish
-	#!/bin/bash
-
-	# Enable some systemd user services
-	systemctl --user enable --now pipewire-pulse pipewire wireplumber
-
-	# Remove autostart file
-	rm $HOME/.config/fish/conf.d/aurchtistic_temp.fish
-
-	# Runs some last actions as root
-	doas /home/$USER/.local/cache/aurchtistic/aurchtistic_finalize_root.sh $USER
-
-	# Remove the cache directory as last action
-	rm -rf /home/$USER/.local/cache/aurchtistic
-
-	# Remove bash leftovers
-	rm /home/$USER/.bash*
 
 	exit 0
 EOF
@@ -464,9 +463,6 @@ sway_setup() {
 	rm -rf /home/$username/temp_confs/
 	typer "Configs installed, home directories created.\n" || return 1
 
-	aurchtistic_finalize_root
-	aurchtistic_finalize
-
 	# Make sure the $username has rights for all their files
 	verbose chown -R "$username:$username" "/home/$username"
 	verbose chmod -R u+x "/home/$username/.local/bin/"
@@ -479,7 +475,7 @@ sway_setup() {
 	typer "Enabled systemd services.\n" || return 1
 }
 
-granfinale() {
+ending() {
 	# Make last adjustments and greets the user
 
 	typer "\nEverything was installed succesfully.\nThe system will reboot shortly, you then will be able to log in with your newly added user.\nSway window manager should start automatically.\n\nRoot user has been disabled, you can use doas for admin rights.\n\n\n\nIf you want to reboot on your own you can interrupt the script with 'Ctrl+C'\n\nHave fun with your brand new Archlinux system :) \n\n\n" || return 1
@@ -512,4 +508,7 @@ sleep 1
 sway_setup || error "\nThe script crashed while configuring sway and installing config files.\n"
 sleep 1
 
-granfinale || error "\nThe script crashed at the end. You almost made it! (almost)\n"
+aurchtistic_finalize || error "\nThe script crashed while creating autostart files.\n"
+sleep 1
+
+ending || error "\nThe script crashed at the end. You almost made it! (almost)\n"

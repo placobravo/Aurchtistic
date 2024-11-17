@@ -5,3 +5,4 @@
 - logseq sync instead of logseq
 - change tty font
 - return function is bloated and has no real purpose, could be removed or at least thinned down
+- cache_dir is used only for packages.csv at this point, maybe it could be removed(?)
