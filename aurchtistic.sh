@@ -282,6 +282,56 @@ aurhelper_install() {
 	typer "Installation of $AURHELPER completed.\n" || return 1
 }
 
+aurchtistic_finalize_root() {
+	# Create file with last actions to run as root after a reboot
+	# Execute some last actions as root user, before being deleted by aurchtistic_temp.fish
+	# The file is used by aurchtistic_finalize()
+	cat << "EOF" >/home/$username/.local/cache/aurchtistic/aurchtistic_finalize_root.sh
+	#!/bin/bash
+
+	# Enable ufw firewall and apply rules
+	ufw default deny incoming
+	ufw allow 22
+	ufw enable
+
+	# Modify /etc/doas.conf
+	sed -i -e "/permit nopass $1 as root/d" /etc/doas.conf
+	sed -i -e "/permit nopass root as $1/d" /etc/doas.conf
+	chmod -c 0400 /etc/doas.conf
+
+	exit 0
+EOF
+}
+
+aurchtistic_finalize() {
+	# Set aurchtistic_finalize script and let it start in fish shell
+	# These are actions that need to be run after a reboot
+
+	# Execute some last actions before deleting itself
+	cat << "EOF" >/home/$username/.config/fish/conf.d/aurchtistic_temp.fish
+	#!/bin/bash
+
+	# Enable some systemd user services
+	systemctl --user enable --now pipewire-pulse pipewire wireplumber
+
+	# Remove autostart file
+	rm $HOME/.config/fish/conf.d/aurchtistic_temp.fish
+
+	# Runs some last actions as root
+	doas /home/$USER/.local/cache/aurchtistic/aurchtistic_finalize_root.sh $USER
+
+	# Remove the cache directory as last action
+	rm -rf /home/$USER/.local/cache/aurchtistic
+
+	# Remove bash leftovers
+	rm /home/$USER/.bash*
+
+	exit 0
+EOF
+
+	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
+}
+
 configure_packages() {
 	# This function downloads and modifies the packages.csv list based on user options
 
@@ -414,9 +464,8 @@ sway_setup() {
 	rm -rf /home/$username/temp_confs/
 	typer "Configs installed, home directories created.\n" || return 1
 
-	# Set aurchtistic_finalize script and let it start in fish shell
-	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >"/home/$username/.config/fish/conf.d/aurchtistic_temp.fish"
-	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
+	aurchtistic_finalize_root
+	aurchtistic_finalize
 
 	# Make sure the $username has rights for all their files
 	verbose chown -R "$username:$username" "/home/$username"
