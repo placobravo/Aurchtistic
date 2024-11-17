@@ -279,7 +279,7 @@ aurhelper_install() {
 	verbose doas -u "$username" git clone "https://aur.archlinux.org/$AURHELPER.git" || return 40
 	cd $AURHELPER
 	verbose doas -u "$username" makepkg --noconfirm -sirc || return 47
-	typer "$AURHELPER installed.\n" || return 1
+	typer "Installation of $AURHELPER completed.\n" || return 1
 }
 
 configure_packages() {
@@ -339,7 +339,7 @@ install_packages() {
 	if [ $? -eq 0 ]; then
 		verbose pacman --noconfirm -Rs base-devel || return 43
 	fi
-	typer "Installing opendoas instead of sudo.\n" || return 1
+	typer "Installing opendoas instead of sudo...\n" || return 1
 	verbose pacman -S --needed --noconfirm opendoas curl debugedit autoconf automake binutils bison fakeroot file findutils flex gawk gcc gettext grep groff gzip libtool m4 make patch pkgconf sed texinfo which || return 43
 
 	printf "permit :wheel\npermit nopass $username as root\npermit nopass root as $username\n" >>/etc/doas.conf || return 42
@@ -410,12 +410,12 @@ sway_setup() {
 	# Install config files
 	verbose git clone --depth=1 "$dotfiles" "/home/$username/temp_confs" || return 40
 
-	cp -rl /home/$username/temp_confs /home/$username
+	cp -rl /home/$username/temp_confs/. /home/$username
 	rm -rf /home/$username/temp_confs/
 	typer "Configs installed, home directories created.\n" || return 1
 
 	# Set aurchtistic_finalize script and let it start in fish shell
-	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >>"/home/$username/.config/fish/conf.d/aurchtistic_temp.fish"
+	echo "bash ${CACHE_DIR}/aurchtistic_finalize.sh" >"/home/$username/.config/fish/conf.d/aurchtistic_temp.fish"
 	typer "Configured aurchtistic_finalize script to run after login.\n" || return 1
 
 	# Make sure the $username has rights for all their files
