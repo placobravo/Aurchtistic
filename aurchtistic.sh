@@ -470,7 +470,7 @@ sway_setup() {
 	typer "Changed home files ownership.\n" || return 1
 
 	# Enable required systemd services
-	verbose systemctl enable NetworkManager bluetooth libvirtd udisks2 ufw sshd || return 46
+	verbose systemctl enable bluetooth libvirtd udisks2 ufw sshd || return 46
 
 	typer "Enabled systemd services.\n" || return 1
 }
