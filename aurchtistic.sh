@@ -449,7 +449,7 @@ install_packages() {
 	fi
 }
 
-sway_setup() {
+desktop_setup() {
 	# Function used to configure the Desktop environment
 
 	# Create home directories
@@ -469,10 +469,57 @@ sway_setup() {
 	verbose chmod -R u+rwx "${CACHE_DIR}"
 	typer "Changed home files ownership.\n" || return 1
 
+
 	# Enable required systemd services
 	verbose systemctl enable bluetooth libvirtd udisks2 ufw sshd || return 46
 
 	typer "Enabled systemd services.\n" || return 1
+}
+
+arkenfox_setup() {
+	# We hardcode the profile by using the "aurchtis" line.
+	#
+	# The installation part is always the same since it is 
+	# an hash of the installation path i.e. "/usr/bin/firefox"
+	#
+	# The path to .mozilla/firefox/ is already created by desktop_setup() 
+	# when copying config files
+	cat << "EOF" > "/home/$username/.mozilla/firefox/profiles.ini"
+	[Install4F96D1932A9F858E]
+	Default=aurchtis.aurchtistic
+
+	[Profile0]
+	Name=aurchtistic
+	IsRelative=1
+	Path=aurchtis.aurchtistic
+	Default=1
+
+	[General]
+	StartWithLastProfile=1
+	Version=2
+EOF
+	# Copy updater.sh prefsCleaner.sh and user.js from github into
+	# the aurchtis.aurchtistic profile we created
+	for x in updater.sh user.js prefsCleaner.sh; do
+		local tempfile="/home/$username/.mozilla/firefox/aurchtis.aurchtistic/$x"
+		curl -Lsk "https://raw.githubusercontent.com/arkenfox/user.js/refs/heads/master/$x" \
+			-o "$tempfile" 
+
+		# Give them execute permissions if they are .sh files
+		if file "$tempfile" | grep shell >/dev/null 2>&1; then
+			chmod +x "$tempfile"
+		fi
+		echo done $x
+	done
+
+	# Chown .mozilla to user
+	chown -R "${username}:${username}" "/home/$username/.mozilla"
+	
+	# Link firefox policies into /etc/firefox/policies/policies.json
+	mkdir -p /etc/firefox/policies
+	ln "/home/$username/.config/aurchtistic/policies.json" /etc/firefox/policies/.
+	chown root:root "/etc/firefox/policies/policies.json"
+
 }
 
 ending() {
@@ -493,6 +540,8 @@ ending() {
 #################################################################################
 flags "$@"
 
+# All the functions must be executed in this specific order, else the script will break
+
 welcome || error "\nThe user exited or a cosmic ray hit a very vital part of your pc.\n"
 sleep 1
 
@@ -505,8 +554,10 @@ sleep 1
 install_packages || error "\nThe script crashed while installing packages.\n"
 sleep 1
 
-sway_setup || error "\nThe script crashed while configuring sway and installing config files.\n"
+desktop_setup || error "\nThe script crashed while configuring the desktop environment and installing config files.\n"
 sleep 1
+
+arkenfox_setup || error "\nThe script crashed while configuring firefox with arkenfox settings.\n"
 
 aurchtistic_finalize || error "\nThe script crashed while creating autostart files.\n"
 sleep 1
